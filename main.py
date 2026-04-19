@@ -24,11 +24,15 @@ class OutputFuncSet(ABC):
         ...
 
     @abstractmethod
-    def write_text(self, name: Optional[str], text: str):
+    def write_text(self, name: Optional[str], text: str, face: Optional[str] = None):
         ...
 
     @abstractmethod
     def write_text_in_parenthesis(self, text: str):
+        ...
+
+    @abstractmethod
+    def write_italic_text(self, text: str):
         ...
 
     @abstractmethod
@@ -56,12 +60,17 @@ class Selection:
     display: str
 
 
+@dataclass
+class Fg:
+    face: str
+
+
 def parse_ast(ast_text: str, output: OutputFuncSet):
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(ast_text)
-    if lua.globals().astver != 2.0:
+    if getattr(lua.globals(), 'astver') != 2.0:
         raise ValueError('Artemis version is not 2.0 or not found')
-    ast_name = lua.globals().astname
+    ast_name = getattr(lua.globals(), 'astname')
     if ast_name is None:
         ast_name = 'ast'
     ast = lua.globals().__getattribute__(ast_name)
@@ -77,6 +86,8 @@ def parse_ast(ast_text: str, output: OutputFuncSet):
     while current_block is not None:
         block = ast[current_block]
         block_type = BlockType.text
+
+        fgs: dict[str, Fg] = dict()
         for attr in block:
             assert type(attr) is int
             match block[attr][1]:
@@ -92,6 +103,9 @@ def parse_ast(ast_text: str, output: OutputFuncSet):
                             parse_ast(ex_file.read(), output)
                     elif block[attr]['label'] is not None and block[attr]['call'] == 0:
                         block_type = BlockType.excall
+                case 'fg':
+                    if (face := block[attr]['face']) is not None:
+                        fgs[block[attr]['ch']] = Fg(face=face)
                 case _:
                     pass  # TODO: parse other options
         match block_type:
@@ -104,8 +118,18 @@ def parse_ast(ast_text: str, output: OutputFuncSet):
                 except TypeError:
                     current_block = block['linknext']
                     continue
+
+                has_face: bool = False
                 if ja['name'] is not None:
                     name = ja['name'][2]
+                    for key, fg in fgs.items():
+                        if key != ja['name'][1]:
+                            output.write_italic_text(f'{key}{fg.face}')
+                            output.write_text(None, ' ')
+                        else:
+                            has_face = True
+                    if len(fgs.keys()) > 1 or (ja['name'][1] not in fgs.keys() and len(fgs.keys()) == 1):
+                        output.newline()
                 else:
                     name = None
                 for attr in ja:
@@ -115,7 +139,10 @@ def parse_ast(ast_text: str, output: OutputFuncSet):
                                 # output.write_text(None, '')
                                 break
                             else:
-                                output.write_text(name, ja[attr])
+                                if has_face:
+                                    output.write_text(name, ja[attr], fgs[ja['name'][1]].face)
+                                else:
+                                    output.write_text(name, ja[attr])
                         try:
                             if ja[attr][1] == 'rt2':
                                 output.newline()
@@ -178,15 +205,25 @@ class MarkdownOutput(OutputFuncSet):
         self.file.write(f'### {text}\n')
 
     @override
-    def write_text(self, name: Optional[str], text: str):
+    def write_text(self, name: Optional[str], text: str, face: Optional[str] = None):
         if name is None:
+            assert face is None
             self.file.write(text)
         else:
-            self.file.write(f'{name}：{text}')
+            if face is None:
+                self.file.write(f'{name}：{text}')
+            else:
+                self.file.write(f'{name}:')
+                self.write_text_in_parenthesis(face)
+                self.file.write(text)
 
     @override
     def write_text_in_parenthesis(self, text: str):
         self.file.write(f'（*{text}*）')
+
+    @override
+    def write_italic_text(self, text: str):
+        self.file.write(f'*{text}*')
 
     @override
     def newline(self):
