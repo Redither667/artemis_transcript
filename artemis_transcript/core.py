@@ -61,7 +61,17 @@ class Fg:
     face: str
 
 
-def parse_ast(ast_text: str, output: OutputFuncSet):
+@dataclass
+class Translation:
+    bg: dict[str, str]
+
+
+def parse_ast(ast_text: str, output: OutputFuncSet, *,
+              translations: Optional[Translation] = None):
+    if translations is None:
+        bg_translation: dict[str, str] = dict()
+    else:
+        bg_translation = translations.bg
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(ast_text)
     if getattr(lua.globals(), 'astver') != 2.0:
@@ -84,6 +94,7 @@ def parse_ast(ast_text: str, output: OutputFuncSet):
         block_type = BlockType.text
 
         fgs: dict[str, Fg] = dict()
+        pre_content: list = list()
         for attr in block:
             assert type(attr) is int
             match block[attr][1]:
@@ -94,16 +105,28 @@ def parse_ast(ast_text: str, output: OutputFuncSet):
                 case 'text':
                     break
                 case 'excall':
-                    if block[attr]['file'] is not None:
-                        with open(f'source/{block[attr]['file']}.ast', 'r', encoding='utf-8') as ex_file:
-                            parse_ast(ex_file.read(), output)
+                    if (file := block[attr]['file']) is not None:
+                        with open(f'source/{file}.ast', 'r', encoding='utf-8') as ex_file:
+                            parse_ast(ex_file.read(), output, translations=translations)
+                        return
                     elif block[attr]['label'] is not None and block[attr]['call'] == 0:
                         block_type = BlockType.excall
                 case 'fg':
                     if (face := block[attr]['face']) is not None:
                         fgs[block[attr]['ch']] = Fg(face=face)
+                case 'bg':
+                    if (file := block[attr]['file']) is not None and file in bg_translation.keys():
+                        pre_content.append(bg_translation[file])
                 case _:
                     pass  # TODO: parse other options
+
+        if len(pre_content) == 1:
+            output.write_italic_text(pre_content[0])
+            output.newline()
+        elif len(pre_content) > 1:
+            output.write_italic_text('，'.join(pre_content))
+            output.newline()
+
         match block_type:
             case BlockType.text:
                 if selection_flag and current_block in selection_blocks.keys():
@@ -116,15 +139,15 @@ def parse_ast(ast_text: str, output: OutputFuncSet):
                     continue
 
                 has_face: bool = False
-                if ja['name'] is not None:
-                    name = ja['name'][2]
+                if (full_name := ja['name']) is not None:
+                    name = full_name[2]
                     for key, fg in fgs.items():
-                        if key != ja['name'][1]:
+                        if key != full_name[1]:
                             output.write_italic_text(f'{key}{fg.face}')
                             output.write_text(None, ' ')
                         else:
                             has_face = True
-                    if len(fgs.keys()) > 1 or (ja['name'][1] not in fgs.keys() and len(fgs.keys()) == 1):
+                    if len(fgs.keys()) > 1 or (full_name[1] not in fgs.keys() and len(fgs.keys()) == 1):
                         output.newline()
                 else:
                     name = None
