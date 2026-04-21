@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from collections import defaultdict, UserDict
+from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Optional
+from typing import Optional, override, TypeAlias
 
 from lupa import LuaRuntime
 
@@ -46,6 +47,7 @@ class BlockType(Enum):
     text = auto()
     excall = auto()
     select = auto()
+    skip = auto()
 
 
 @dataclass
@@ -61,17 +63,33 @@ class Fg:
     face: str
 
 
-@dataclass
+class DictDefaultReturnKey[T](UserDict[T, T]):
+    @override
+    def __getitem__(self, item: T):
+        if item in self.keys():
+            return UserDict.__getitem__(self, item)
+        else:
+            return item
+
+
+@dataclass(frozen=True)
 class Translation:
-    bg: dict[str, str]
+    bg: dict[str, str] = field(default_factory=dict)
+    face: DictDefaultReturnKey[str] = field(default_factory=DictDefaultReturnKey),
+    movie: DictDefaultReturnKey[str] = field(default_factory=DictDefaultReturnKey)
+    hjump: str = '跳过h scene...'
+
+@dataclass
+class ParseOption:
+    translation: Translation = field(default_factory=Translation)
+    hjump: bool = False
 
 
 def parse_ast(ast_text: str, output: OutputFuncSet, *,
-              translations: Optional[Translation] = None):
-    if translations is None:
-        bg_translation: dict[str, str] = dict()
-    else:
-        bg_translation = translations.bg
+              option: Optional[ParseOption] = None):
+    if option is None:
+        option: ParseOption = ParseOption()
+
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(ast_text)
     if getattr(lua.globals(), 'astver') != 2.0:
@@ -107,16 +125,24 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                 case 'excall':
                     if (file := block[attr]['file']) is not None:
                         with open(f'source/{file}.ast', 'r', encoding='utf-8') as ex_file:
-                            parse_ast(ex_file.read(), output, translations=translations)
+                            parse_ast(ex_file.read(), output, option=option)
                         return
-                    elif block[attr]['label'] is not None and block[attr]['call'] == 0:
-                        block_type = BlockType.excall
+                    elif block[attr]['label'] is not None:
+                        if block[attr]['cond'] == 's.conf.hjump==1':
+                            output.write_italic_text(option.translation.hjump)
+                            output.newline()
+                            current_block = get_label_block(ast, block[attr]['label'])
+                            block_type = BlockType.excall
+                        elif block[attr]['label'] is not None and block[attr]['call'] == 0:
+                            block_type = BlockType.skip
                 case 'fg':
                     if (face := block[attr]['face']) is not None:
                         fgs[block[attr]['ch']] = Fg(face=face)
                 case 'bg':
-                    if (file := block[attr]['file']) is not None and file in bg_translation.keys():
-                        pre_content.append(bg_translation[file])
+                    if (file := block[attr]['file']) is not None and file in option.translation.bg.keys():
+                        pre_content.append(option.translation.bg[file])
+                case 'movie':
+                    pre_content.append(option.translation.movie[block[attr]['file']])
                 case _:
                     pass  # TODO: parse other options
 
@@ -143,7 +169,7 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                     name = full_name[2]
                     for key, fg in fgs.items():
                         if key != full_name[1]:
-                            output.write_italic_text(f'{key}{fg.face}')
+                            output.write_italic_text(f'{key}{option.translation.face[fg.face]}')
                             output.write_text(None, ' ')
                         else:
                             has_face = True
@@ -159,7 +185,8 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                                 break
                             else:
                                 if has_face:
-                                    output.write_text(name, ja[attr], fgs[ja['name'][1]].face)
+                                    output.write_text(name, ja[attr],
+                                                      option.translation.face[fgs[ja['name'][1]].face])
                                 else:
                                     output.write_text(name, ja[attr])
                         try:
@@ -169,8 +196,10 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                             pass
 
                 current_block = block['linknext']
+
             case BlockType.excall:
-                current_block = block['linknext']
+                pass
+
             case BlockType.select:
                 selections: list[Selection] = []
                 for attr in block:
@@ -201,3 +230,9 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                     output.newline()
                 selection_flag = True
                 current_block = block['linknext']
+
+            case BlockType.skip:
+                current_block = block['linknext']
+
+            case _:
+                raise ValueError('Unreachable code! block_type is not a BlockType')
