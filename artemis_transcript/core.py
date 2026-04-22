@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from collections import defaultdict, UserDict
+from collections import UserDict
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Optional, override, TypeAlias
+from typing import Optional, override
 
 from lupa import LuaRuntime
 
@@ -65,11 +65,11 @@ class Fg:
 
 class DictDefaultReturnKey[T](UserDict[T, T]):
     @override
-    def __getitem__(self, item: T):
-        if item in self.keys():
-            return UserDict.__getitem__(self, item)
+    def __getitem__(self, key: T):
+        if key in self.keys():
+            return UserDict.__getitem__(self, key)
         else:
-            return item
+            return key
 
 
 @dataclass(frozen=True)
@@ -78,6 +78,7 @@ class Translation:
     face: DictDefaultReturnKey[str] = field(default_factory=DictDefaultReturnKey),
     movie: DictDefaultReturnKey[str] = field(default_factory=DictDefaultReturnKey)
     hjump: str = '跳过h scene...'
+
 
 @dataclass
 class ParseOption:
