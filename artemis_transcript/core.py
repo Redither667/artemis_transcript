@@ -131,12 +131,12 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                             parse_ast(ex_file.read(), output, option=option)
                         return
                     elif block[attr]['label'] is not None:
-                        if block[attr]['cond'] == 's.conf.hjump==1':
+                        if option.hjump and block[attr]['cond'] == 's.conf.hjump==1':
                             output.write_italic_text(option.translation.hjump)
                             output.newline()
                             current_block = get_label_block(ast, block[attr]['label'])
                             block_type = BlockType.excall
-                        elif block[attr]['label'] is not None and block[attr]['call'] == 0:
+                        elif block[attr]['call'] == 0:
                             block_type = BlockType.skip
                 case 'fg':
                     if (face := block[attr]['face']) is not None:

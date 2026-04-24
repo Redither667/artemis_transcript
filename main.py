@@ -139,4 +139,4 @@ def docx_test_hjump():
     test_hjump(lambda x: DocxOutput(Path(x)), 'docx')
 
 if __name__ == '__main__':
-    docx_test_hjump()
+    docx_test()
