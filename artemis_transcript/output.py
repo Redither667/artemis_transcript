@@ -3,7 +3,6 @@ from typing import override, Optional
 
 from docx import Document
 from docx.oxml.ns import qn
-from docx.text.paragraph import Paragraph
 
 from artemis_transcript.core import OutputFuncSet
 

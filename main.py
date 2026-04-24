@@ -77,7 +77,7 @@ for k, v in _face_translation1.items():
     face_translation[f'{k}Ａ'] = f'{v}Ａ'
     face_translation[f'{k}Ｂ'] = f'{v}Ｂ'
 movie_translation: dict[str, str] = {'yukata_op': '播放由语开场',
-                                     'op': '播放OP'}
+                                     'op': '播放OP《Q.E.D》'}
 trans: Translation = Translation(bg_translation,
                                  DictDefaultReturnKey[str](face_translation),
                                  DictDefaultReturnKey[str](movie_translation))

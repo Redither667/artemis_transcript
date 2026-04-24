@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from collections import UserDict
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from pathlib import Path
 from typing import Optional, override
 
 from lupa import LuaRuntime
@@ -83,6 +84,7 @@ class Translation:
 @dataclass
 class ParseOption:
     translation: Translation = field(default_factory=Translation)
+    path: Path = field(default_factory=lambda: Path('source'))
     hjump: bool = False
 
 
@@ -125,7 +127,7 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                     break
                 case 'excall':
                     if (file := block[attr]['file']) is not None:
-                        with open(f'source/{file}.ast', 'r', encoding='utf-8') as ex_file:
+                        with open(option.path / f'{file}.ast', 'r', encoding='utf-8') as ex_file:
                             parse_ast(ex_file.read(), output, option=option)
                         return
                     elif block[attr]['label'] is not None:
