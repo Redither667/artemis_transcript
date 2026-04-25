@@ -1,11 +1,40 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, ABCMeta, update_abstractmethods
 from collections import UserDict
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from operator import methodcaller
 from pathlib import Path
-from typing import Optional, override
+from typing import Optional, override, TYPE_CHECKING
+from warnings import deprecated
 
 from lupa import LuaRuntime
+
+
+class DeferredOperation(ABCMeta):
+    def __new__(cls, name, bases, attrs):
+        assert '_stored_calls' not in attrs
+        attrs['_stored_calls'] = list()
+
+        def perform_calls(self, o):
+            for i in self._stored_calls:
+                i(o)
+
+        attrs['perform_calls'] = perform_calls
+
+        new_cls = ABCMeta.__new__(cls, name, bases, attrs)
+
+        def store_call(func_name):
+            def wrapper(self, *args, **kwargs):
+                self._stored_calls.append(methodcaller(func_name, *args, **kwargs))
+
+            return wrapper
+
+        for method in new_cls.__abstractmethods__:
+            setattr(new_cls, method, store_call(method))
+
+        update_abstractmethods(new_cls)
+
+        return new_cls
 
 
 class OutputFuncSet(ABC):
@@ -22,7 +51,7 @@ class OutputFuncSet(ABC):
         ...
 
     @abstractmethod
-    def write_text(self, name: Optional[str], text: str, face: Optional[str] = None):
+    def write(self, name: Optional[str], text: str, face: Optional[str] = None):
         ...
 
     @abstractmethod
@@ -30,12 +59,102 @@ class OutputFuncSet(ABC):
         ...
 
     @abstractmethod
-    def write_italic_text(self, text: str):
+    def write_italic(self, text: str):
         ...
 
     @abstractmethod
     def newline(self):
         ...
+
+    @abstractmethod
+    def new_paragraph(self):
+        ...
+
+
+class DeferredOutput(OutputFuncSet, metaclass=DeferredOperation):
+    if TYPE_CHECKING:
+        def perform_calls(self, output):
+            pass
+
+        def write_story_line(self, text: str):
+            pass
+
+        def write_save_title(self, text: str):
+            pass
+
+        def write_select_title(self, text: str):
+            pass
+
+        def write(self, name: Optional[str], text: str, face: Optional[str] = None):
+            pass
+
+        def write_text_in_parenthesis(self, text: str):
+            pass
+
+        def write_italic(self, text: str):
+            pass
+
+        def newline(self):
+            pass
+
+        def new_paragraph(self):
+            pass
+
+
+@deprecated('Use DeferredOutput instead')
+class _GeneralOutput(OutputFuncSet):
+    def __init__(self):
+        self.text: list[methodcaller] = list()
+
+    def write_to(self, output: OutputFuncSet):
+        for text in self.text:
+            text(output)
+
+    @staticmethod
+    def _store_call(func):
+        def wrapper(self, *args, **kwargs):
+            self.text.append(methodcaller(func.__name__, *args, **kwargs))
+        return wrapper
+
+    @override
+    @_store_call
+    def write_story_line(self, text: str):
+        pass
+
+    @override
+    @_store_call
+    def write_save_title(self, text: str):
+        pass
+
+    @override
+    @_store_call
+    def write_select_title(self, text: str):
+        pass
+
+    @override
+    @_store_call
+    def write(self, name: Optional[str], text: str, face: Optional[str] = None):
+        pass
+
+    @override
+    @_store_call
+    def write_text_in_parenthesis(self, text: str):
+        pass
+
+    @override
+    @_store_call
+    def write_italic(self, text: str):
+        pass
+
+    @override
+    @_store_call
+    def newline(self):
+        pass
+
+    @override
+    @_store_call
+    def new_paragraph(self):
+        pass
 
 
 def get_label_block(ast, label_name: str) -> str:
@@ -88,8 +207,7 @@ class ParseOption:
     hjump: bool = False
 
 
-def parse_ast(ast_text: str, output: OutputFuncSet, *,
-              option: Optional[ParseOption] = None):
+def _parse_ast(ast_text: str, output: DeferredOutput, *, option: Optional[ParseOption] = None):
     if option is None:
         option: ParseOption = ParseOption()
 
@@ -128,11 +246,11 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                 case 'excall':
                     if (file := block[attr]['file']) is not None:
                         with open(option.path / f'{file}.ast', 'r', encoding='utf-8') as ex_file:
-                            parse_ast(ex_file.read(), output, option=option)
+                            _parse_ast(ex_file.read(), output, option=option)
                         return
                     elif block[attr]['label'] is not None:
                         if option.hjump and block[attr]['cond'] == 's.conf.hjump==1':
-                            output.write_italic_text(option.translation.hjump)
+                            output.write_italic(option.translation.hjump)
                             output.newline()
                             current_block = get_label_block(ast, block[attr]['label'])
                             block_type = BlockType.excall
@@ -150,10 +268,10 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                     pass  # TODO: parse other options
 
         if len(pre_content) == 1:
-            output.write_italic_text(pre_content[0])
+            output.write_italic(pre_content[0])
             output.newline()
         elif len(pre_content) > 1:
-            output.write_italic_text('，'.join(pre_content))
+            output.write_italic('，'.join(pre_content))
             output.newline()
 
         match block_type:
@@ -172,8 +290,8 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                     name = full_name[2]
                     for key, fg in fgs.items():
                         if key != full_name[1]:
-                            output.write_italic_text(f'{key}{option.translation.face[fg.face]}')
-                            output.write_text(None, ' ')
+                            output.write_italic(f'{key}{option.translation.face[fg.face]}')
+                            output.write(None, ' ')
                         else:
                             has_face = True
                     if len(fgs.keys()) > 1 or (full_name[1] not in fgs.keys() and len(fgs.keys()) == 1):
@@ -188,10 +306,9 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                                 break
                             else:
                                 if has_face:
-                                    output.write_text(name, ja[attr],
-                                                      option.translation.face[fgs[ja['name'][1]].face])
+                                    output.write(name, ja[attr], option.translation.face[fgs[ja['name'][1]].face])
                                 else:
-                                    output.write_text(name, ja[attr])
+                                    output.write(name, ja[attr])
                         try:
                             if ja[attr][1] == 'rt2':
                                 output.newline()
@@ -212,9 +329,8 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                             output.write_save_title(block[attr]['text'])
                         case 'select':
                             try:
-                                selections.append(Selection(block[attr]['label'],
-                                                            block[attr]['text'],
-                                                            block[attr]['exp'], ''))
+                                selections.append(
+                                    Selection(block[attr]['label'], block[attr]['text'], block[attr]['exp'], ''))
                             except TypeError and IndexError:
                                 pass
                         case 'text':
@@ -226,7 +342,7 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
                 ja = select['ja']
                 for attr, selection in zip(ja, selections):
                     assert type(attr) is int and type(ja[attr]) is str
-                    output.write_text(None, f'→ {ja[attr]}')
+                    output.write(None, f'→ {ja[attr]}')
                     output.write_text_in_parenthesis(selection.exp)
                     selection.display = ja[attr]
                     selection_blocks[get_label_block(ast, selection.label)] = selection
@@ -239,3 +355,8 @@ def parse_ast(ast_text: str, output: OutputFuncSet, *,
 
             case _:
                 raise ValueError('Unreachable code! block_type is not a BlockType')
+
+def parse_ast(ast_text: str, output: OutputFuncSet, *, option: Optional[ParseOption] = None):
+    deferred_output = DeferredOutput()
+    _parse_ast(ast_text, deferred_output, option=option)
+    deferred_output.perform_calls(output)

@@ -4,7 +4,7 @@ from typing import override, Optional
 from docx import Document
 from docx.oxml.ns import qn
 
-from artemis_transcript.core import OutputFuncSet
+from artemis_transcript import OutputFuncSet, DeferredOutput
 
 
 class MarkdownOutput(OutputFuncSet):
@@ -27,7 +27,7 @@ class MarkdownOutput(OutputFuncSet):
         self.file.write(f'### {text}\n')
 
     @override
-    def write_text(self, name: Optional[str], text: str, face: Optional[str] = None):
+    def write(self, name: Optional[str], text: str, face: Optional[str] = None):
         if name is None:
             assert face is None
             self.file.write(text)
@@ -44,12 +44,17 @@ class MarkdownOutput(OutputFuncSet):
         self.file.write(f'（*{text}*）')
 
     @override
-    def write_italic_text(self, text: str):
+    def write_italic(self, text: str):
         self.file.write(f'*{text}*')
 
     @override
     def newline(self):
         self.file.write('  \n')
+
+    @override
+    def new_paragraph(self):
+        self.file.write('\n\n')
+
 
 class DocxOutput(OutputFuncSet):
     def __init__(self, file: Path):
@@ -80,7 +85,7 @@ class DocxOutput(OutputFuncSet):
         self.paragraph = self.document.add_paragraph()
 
     @override
-    def write_text(self, name: Optional[str], text: str, face: Optional[str] = None):
+    def write(self, name: Optional[str], text: str, face: Optional[str] = None):
         if name is None:
             assert face is None
             self.paragraph.add_run(text)
@@ -95,15 +100,24 @@ class DocxOutput(OutputFuncSet):
     @override
     def write_text_in_parenthesis(self, text: str):
         self.paragraph.add_run('（')
-        self.write_italic_text(text)
+        self.write_italic(text)
         self.paragraph.add_run('）')
 
     @override
-    def write_italic_text(self, text: str):
+    def write_italic(self, text: str):
         run = self.paragraph.add_run(text)
         run.font.name = 'Times New Roman Italic'
         run.element.rPr.rFonts.set(qn('w:eastAsia'), '楷体')
 
     @override
     def newline(self):
-        self.paragraph.add_run('').add_break()
+        self.paragraph.add_run().add_break()
+
+    @override
+    def new_paragraph(self):
+        self.paragraph = self.document.add_paragraph()
+
+if __name__ == '__main__':
+    d = DeferredOutput()
+    d.write_select_title('1')
+    d.write_story_line('2')
