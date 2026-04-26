@@ -83,7 +83,7 @@ trans: Translation = Translation(bg_translation,
                                  DictDefaultReturnKey[str](movie_translation))
 
 
-def test(out_getter: Callable[[str], OutputFuncSet], suffix: str):
+def test(out_getter: Callable[[str], OutputFormat], suffix: str):
     option: ParseOption = ParseOption(trans)
     output = out_getter(f'output/0-kyo.{suffix}')
     output.write_story_line('共通线')
@@ -105,7 +105,7 @@ def test(out_getter: Callable[[str], OutputFuncSet], suffix: str):
     with open('source/3_say_03-01.ast', 'r', encoding='utf-8') as f:
         parse_ast(f.read(), output, option=option)
 
-def test_hjump(out_getter: Callable[[str], OutputFuncSet], suffix: str):
+def test_hjump(out_getter: Callable[[str], OutputFormat], suffix: str):
     option: ParseOption = ParseOption(trans, hjump=True)
     output = out_getter(f'output/0-kyo.{suffix}')
     output.write_story_line('共通线')

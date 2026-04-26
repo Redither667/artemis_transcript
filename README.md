@@ -9,11 +9,11 @@ suggestions are also welcomed.
 ## How to use
 
 ### Basic usage
-You need to get an instance of `OutputFuncSet` and pass it to function `parse_ast`. You may refer to the test functions
+You need to get an instance of `OutputFormat` and pass it to function `parse_ast`. You may refer to the test functions
 in `main.py`.
 
 ### Custom behavior
-Inherit `OutputFuncSet` for customized output. Pass an instance of `ParseOption` to `parse_ast` for adjustments.
+Inherit `OutputFormat` for customized output. Pass an instance of `ParseOption` to `parse_ast` for adjustments.
 
 ## Further development
 

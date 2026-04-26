@@ -37,7 +37,7 @@ class DeferredOperation(ABCMeta):
         return new_cls
 
 
-class OutputFuncSet(ABC):
+class OutputFormat(ABC):
     @abstractmethod
     def write_story_line(self, text: str):
         ...
@@ -71,7 +71,7 @@ class OutputFuncSet(ABC):
         ...
 
 
-class DeferredOutput(OutputFuncSet, metaclass=DeferredOperation):
+class DeferredOutput(OutputFormat, metaclass=DeferredOperation):
     if TYPE_CHECKING:
         def perform_calls(self, output):
             pass
@@ -102,11 +102,11 @@ class DeferredOutput(OutputFuncSet, metaclass=DeferredOperation):
 
 
 @deprecated('Use DeferredOutput instead')
-class _GeneralOutput(OutputFuncSet):
+class _GeneralOutput(OutputFormat):
     def __init__(self):
         self.text: list[methodcaller] = list()
 
-    def write_to(self, output: OutputFuncSet):
+    def write_to(self, output: OutputFormat):
         for text in self.text:
             text(output)
 
@@ -207,7 +207,7 @@ class ParseOption:
     hjump: bool = False
 
 
-def _parse_ast(ast_text: str, output: DeferredOutput, *, option: Optional[ParseOption] = None):
+def _deferred_parse_ast(ast_text: str, output: DeferredOutput, *, option: Optional[ParseOption] = None):
     if option is None:
         option: ParseOption = ParseOption()
 
@@ -246,7 +246,7 @@ def _parse_ast(ast_text: str, output: DeferredOutput, *, option: Optional[ParseO
                 case 'excall':
                     if (file := block[attr]['file']) is not None:
                         with open(option.path / f'{file}.ast', 'r', encoding='utf-8') as ex_file:
-                            _parse_ast(ex_file.read(), output, option=option)
+                            deferred_parse_ast(ex_file.read(), output, option=option)
                         return
                     elif block[attr]['label'] is not None:
                         if option.hjump and block[attr]['cond'] == 's.conf.hjump==1':
@@ -356,7 +356,10 @@ def _parse_ast(ast_text: str, output: DeferredOutput, *, option: Optional[ParseO
             case _:
                 raise ValueError('Unreachable code! block_type is not a BlockType')
 
-def parse_ast(ast_text: str, output: OutputFuncSet, *, option: Optional[ParseOption] = None):
+def deferred_parse_ast(ast_text: str, *, option: Optional[ParseOption] = None) -> DeferredOutput:
     deferred_output = DeferredOutput()
-    _parse_ast(ast_text, deferred_output, option=option)
-    deferred_output.perform_calls(output)
+    _deferred_parse_ast(ast_text, deferred_output, option=option)
+    return deferred_output
+
+def parse_ast(ast_text: str, output: OutputFormat, *, option: Optional[ParseOption] = None):
+    deferred_parse_ast(ast_text, option=option).perform_calls(output)

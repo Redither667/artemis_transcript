@@ -4,10 +4,10 @@ from typing import override, Optional
 from docx import Document
 from docx.oxml.ns import qn
 
-from artemis_transcript import OutputFuncSet, DeferredOutput
+from artemis_transcript import OutputFormat, DeferredOutput
 
 
-class MarkdownOutput(OutputFuncSet):
+class MarkdownOutput(OutputFormat):
     def __init__(self, file: Path, *args, **kwargs):
         self.file = open(file, *args, **kwargs)
 
@@ -56,7 +56,7 @@ class MarkdownOutput(OutputFuncSet):
         self.file.write('\n\n')
 
 
-class DocxOutput(OutputFuncSet):
+class DocxOutput(OutputFormat):
     def __init__(self, file: Path):
         self.path = file
         self.document = Document()
