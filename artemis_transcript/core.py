@@ -12,8 +12,11 @@ from lupa import LuaRuntime
 
 class DeferredOperation(ABCMeta):
     def __new__(cls, name, bases, attrs):
-        assert '_stored_calls' not in attrs
-        attrs['_stored_calls'] = list()
+        assert '__init__' not in attrs
+        def __init__(self):
+            self._stored_calls = list()
+
+        attrs['__init__'] = __init__
 
         def perform_calls(self, o):
             for i in self._stored_calls:
@@ -73,6 +76,9 @@ class OutputFormat(ABC):
 
 class DeferredOutput(OutputFormat, metaclass=DeferredOperation):
     if TYPE_CHECKING:
+        def __init__(self):
+            pass
+
         def perform_calls(self, output):
             pass
 
@@ -181,6 +187,7 @@ class Selection:
 @dataclass
 class Fg:
     face: str
+    act: str = field(default_factory=str)
 
 
 class DictDefaultReturnKey[T](UserDict[T, T]):
@@ -195,7 +202,7 @@ class DictDefaultReturnKey[T](UserDict[T, T]):
 @dataclass(frozen=True)
 class Translation:
     bg: dict[str, str] = field(default_factory=dict)
-    face: DictDefaultReturnKey[str] = field(default_factory=DictDefaultReturnKey),
+    face: DictDefaultReturnKey[str] = field(default_factory=DictDefaultReturnKey)
     movie: DictDefaultReturnKey[str] = field(default_factory=DictDefaultReturnKey)
     hjump: str = '跳过h scene...'
 
@@ -244,9 +251,9 @@ def _deferred_parse_ast(ast_text: str, output: DeferredOutput, *, option: Option
                 case 'text':
                     break
                 case 'excall':
-                    if (file := block[attr]['file']) is not None:
+                    if (file := block[attr]['file']) is not None and block[attr]['cond'] != 'f.selectcount==4':
                         with open(option.path / f'{file}.ast', 'r', encoding='utf-8') as ex_file:
-                            deferred_parse_ast(ex_file.read(), output, option=option)
+                            _deferred_parse_ast(ex_file.read(), output, option=option)
                         return
                     elif block[attr]['label'] is not None:
                         if option.hjump and block[attr]['cond'] == 's.conf.hjump==1':
@@ -259,13 +266,38 @@ def _deferred_parse_ast(ast_text: str, output: DeferredOutput, *, option: Option
                 case 'fg':
                     if (face := block[attr]['face']) is not None:
                         fgs[block[attr]['ch']] = Fg(face=face)
+                case 'fgact':
+                    # if (act := block[attr]['act']) is not None:
+                    #     fgs[block[attr]['ch']] = Fg(face=fgs[block[attr]['ch']].face , act=act)
+                    ...
                 case 'bg':
                     if (file := block[attr]['file']) is not None and file in option.translation.bg.keys():
                         pre_content.append(option.translation.bg[file])
                 case 'movie':
                     pre_content.append(option.translation.movie[block[attr]['file']])
+                case 'ex':
+                    # if block[attr]['func'] == "wait":
+                    #     for key, fg in fgs.items():
+                    #         output.write_italic(f'{key}{option.translation.face[fg.face]}')
+                    #         output.write(None, ' ')
+                    #     try:
+                    #         time = int(block[attr]["time"])
+                    #         if time == 0:
+                    #             output.write_italic(f'（随后）')
+                    #         else:
+                    #             output.write_italic(f'（{time / 1000}s后）')
+                    #     except ValueError:
+                    #         time: str = block[attr]["time"]
+                    #         time: int = int(time[5:])
+                    #         if time == 0:
+                    #             output.write_italic(f'随后')
+                    #         else:
+                    #             output.write_italic(f'（约{time / 1000}s后）')
+                    #     output.newline()
+                    #     fgs.clear()
+                    ...
                 case _:
-                    pass  # TODO: parse other options
+                    pass
 
         if len(pre_content) == 1:
             output.write_italic(pre_content[0])
@@ -290,7 +322,10 @@ def _deferred_parse_ast(ast_text: str, output: DeferredOutput, *, option: Option
                     name = full_name[2]
                     for key, fg in fgs.items():
                         if key != full_name[1]:
-                            output.write_italic(f'{key}{option.translation.face[fg.face]}')
+                            if fg.act == "":
+                                output.write_italic(f'{key}{option.translation.face[fg.face]}')
+                            else:
+                                output.write_italic(f'{key}{option.translation.face[fg.face]}，做“{fg.act}”的动作')
                             output.write(None, ' ')
                         else:
                             has_face = True
@@ -306,7 +341,10 @@ def _deferred_parse_ast(ast_text: str, output: DeferredOutput, *, option: Option
                                 break
                             else:
                                 if has_face:
-                                    output.write(name, ja[attr], option.translation.face[fgs[ja['name'][1]].face])
+                                    if fgs[ja['name'][1]].act == "":
+                                        output.write(name, ja[attr], option.translation.face[fgs[ja['name'][1]].face])
+                                    else:
+                                        output.write(name, ja[attr], f'{option.translation.face[fgs[ja['name'][1]].face]}，做“{fgs[ja['name'][1]].act}”的动作')
                                 else:
                                     output.write(name, ja[attr])
                         try:

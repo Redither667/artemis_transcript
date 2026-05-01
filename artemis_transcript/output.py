@@ -35,7 +35,7 @@ class MarkdownOutput(OutputFormat):
             if face is None:
                 self.file.write(f'{name}：{text}')
             else:
-                self.file.write(f'{name}:')
+                self.file.write(f'{name}：')
                 self.write_text_in_parenthesis(face)
                 self.file.write(text)
 
@@ -61,27 +61,27 @@ class DocxOutput(OutputFormat):
         self.path = file
         self.document = Document()
         self.paragraph = self.document.add_paragraph()
-        style = self.document.styles['Normal']
-        style.font.name = 'Times New Roman'
-        style.element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        normal_style = self.document.styles['Normal']
+        normal_style.font.name = 'Times New Roman'
+        normal_style.element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
 
     def __del__(self):
         self.document.save(str(self.path))
 
     @override
     def write_story_line(self, text: str):
-        title = self.document.add_heading(text, level=0)
+        title = self.document.add_heading(text, level=1)
         title.alignment = 1
         self.paragraph = self.document.add_paragraph()
 
     @override
     def write_save_title(self, text: str):
-        self.document.add_heading(text, level=1)
+        self.document.add_heading(text, level=2)
         self.paragraph = self.document.add_paragraph()
 
     @override
     def write_select_title(self, text: str):
-        self.document.add_heading(text, level=2)
+        self.document.add_heading(text, level=3)
         self.paragraph = self.document.add_paragraph()
 
     @override

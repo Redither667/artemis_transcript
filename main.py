@@ -15,7 +15,7 @@ bg_translation: dict[str, str] = {'ic_say_in': 'Another view of 纱由美...',
 _face_translation: dict[str, str] = {'普通': '普通',
                                      '驚き': '一惊',
                                      'だるい': '懒倦',
-                                     'きょとん': '茫然',
+                                     'きょとん': '愣住',
                                      '微笑み': '微笑',
                                      '困り笑い': '苦笑',
                                      'イタズラ笑み': '淘气地笑',
@@ -127,6 +127,23 @@ def test_hjump(out_getter: Callable[[str], OutputFormat], suffix: str):
     with open('source/3_say_03-01.ast', 'r', encoding='utf-8') as f:
         parse_ast(f.read(), output, option=option)
 
+    output = out_getter(f'output/3-say.{suffix}')
+    deferred = DeferredOutput()
+    deferred.write_story_line('共通线')
+    from artemis_transcript.core import _deferred_parse_ast
+    with open('source/0_kyo_01.ast', 'r', encoding='utf-8') as f:
+        _deferred_parse_ast(f.read(), deferred, option=option)
+    deferred.write_story_line('纱由美线Part Ⅰ')
+    with open('source/3_say_01-01.ast', 'r', encoding='utf-8') as f:
+        _deferred_parse_ast(f.read(), deferred, option=option)
+    deferred.write_story_line('纱由美线Part Ⅱ')
+    with open('source/3_say_02-01.ast', 'r', encoding='utf-8') as f:
+        _deferred_parse_ast(f.read(), deferred, option=option)
+    deferred.write_story_line('纱由美线Part Ⅲ')
+    with open('source/3_say_03-01.ast', 'r', encoding='utf-8') as f:
+        _deferred_parse_ast(f.read(), deferred, option=option)
+    deferred.perform_calls(output)
+
 
 def md_test():
     test(lambda x: MarkdownOutput(Path(x), 'w', encoding='utf-8'), 'md')
@@ -139,4 +156,8 @@ def docx_test_hjump():
     test_hjump(lambda x: DocxOutput(Path(x)), 'docx')
 
 if __name__ == '__main__':
-    docx_test()
+    deferred = DeferredOutput()
+    from artemis_transcript.core import _deferred_parse_ast
+
+    with open('source/0_kyo_01.ast', 'r', encoding='utf-8') as f:
+        _deferred_parse_ast(f.read(), deferred)
